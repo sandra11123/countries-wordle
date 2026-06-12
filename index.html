@@ -139,4 +139,169 @@
         .status-banner {
             text-align: center;
             font-size: 18px;
-            font-
+            font-weight: 700;
+            margin-top: 15px;
+            min-height: 27px;
+        }
+
+        .status-banner.win { color: var(--accent-green); }
+        .status-banner.lose { color: var(--accent-red); }
+
+        @keyframes slideIn {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-card">
+    <header>
+        <h1>WORLDLE</h1>
+        <div class="subtitle">Guess the hidden country within 6 attempts</div>
+    </header>
+
+    <div class="input-group">
+        <select id="countrySelector">
+            <option value="" disabled selected>Select a country...</option>
+        </select>
+        <button id="submitBtn" onclick="submitGuess()">GUESS</button>
+    </div>
+
+    <div class="rows-container" id="rowsContainer"></div>
+    <div class="status-banner" id="statusBanner"></div>
+</div>
+
+<script>
+    // Comprehensive geographical dataset
+    const countryDataset = [
+        { name: "Argentina", lat: -38.4161, lon: -63.6167 },
+        { name: "Australia", lat: -25.2744, lon: 133.7751 },
+        { name: "Brazil", lat: -14.2350, lon: -51.9253 },
+        { name: "Canada", lat: 56.1304, lon: -106.3468 },
+        { name: "China", lat: 35.8617, lon: 104.1954 },
+        { name: "Egypt", lat: 26.8206, lon: 30.8025 },
+        { name: "France", lat: 46.2276, lon: 2.2137 },
+        { name: "Germany", lat: 51.1657, lon: 10.4515 },
+        { name: "India", lat: 20.5937, lon: 78.9629 },
+        { name: "Italy", lat: 41.8719, lon: 12.5674 },
+        { name: "Japan", lat: 36.2048, lon: 138.2529 },
+        { name: "Mexico", lat: 23.6345, lon: -102.5528 },
+        { name: "Nigeria", lat: 9.0820, lon: 8.6753 },
+        { name: "South Africa", lat: -30.5595, lon: 22.9375 },
+        { name: "United Kingdom", lat: 55.3781, lon: -3.4360 },
+        { name: "United States", lat: 37.0902, lon: -95.7129 }
+    ];
+
+    let targetCountry;
+    let currentAttempt = 0;
+    const maxAttempts = 6;
+
+    function initGame() {
+        // Alphabetize the selection array
+        countryDataset.sort((a, b) => a.name.localeCompare(b.name));
+        
+        const selector = document.getElementById("countrySelector");
+        countryDataset.forEach(country => {
+            const option = document.createElement("option");
+            option.value = country.name;
+            option.textContent = country.name;
+            selector.appendChild(option);
+        });
+
+        // Select a random target country
+        targetCountry = countryDataset[Math.floor(Math.random() * countryDataset.length)];
+    }
+
+    // Haversine Formula for distance tracking
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const EarthRadiusKm = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                  
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.round(EarthRadiusKm * c);
+    }
+
+    // Bearing mapping to find compass layout directions
+    function calculateBearingDirection(lat1, lon1, lat2, lon2) {
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const rLat1 = lat1 * Math.PI / 180;
+        const rLat2 = lat2 * Math.PI / 180;
+
+        const y = Math.sin(dLon) * Math.cos(rLat2);
+        const x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon);
+        
+        let bearing = Math.atan2(y, x) * 180 / Math.PI;
+        bearing = (bearing + 360) % 360;
+
+        const compassDirections = ["⬆️ N", "↗️ NE", "➡️ E", "↘️ SE", "⬇️ S", "↙️ SW", "⬅️ W", "↖️ NW"];
+        const index = Math.round(bearing / 45) % 8;
+        return compassDirections[index];
+    }
+
+    function submitGuess() {
+        const selector = document.getElementById("countrySelector");
+        const selectedGuess = selector.value;
+        
+        if (!selectedGuess) return;
+
+        currentAttempt++;
+        const guessedCountry = countryDataset.find(c => c.name === selectedGuess);
+        const container = document.getElementById("rowsContainer");
+
+        // Remove the selected option so the user can't accidentally pick it again
+        const selectedIndex = selector.selectedIndex;
+        selector.remove(selectedIndex);
+        selector.value = ""; 
+
+        if (selectedGuess === targetCountry.name) {
+            container.innerHTML += `
+                <div class="row correct">
+                    <span>🎉 ${selectedGuess}</span>
+                    <span>0 km</span>
+                    <span>🎯 Target</span>
+                </div>`;
+            handleGameOver(true);
+            return;
+        }
+
+        const distance = calculateDistance(guessedCountry.lat, guessedCountry.lon, targetCountry.lat, targetCountry.lon);
+        const direction = calculateBearingDirection(guessedCountry.lat, guessedCountry.lon, targetCountry.lat, targetCountry.lon);
+
+        container.innerHTML += `
+            <div class="row">
+                <span>🌍 ${selectedGuess}</span>
+                <div class="row-part">
+                    <span>${distance.toLocaleString()} km</span>
+                    <span>${direction}</span>
+                </div>
+            </div>`;
+
+        if (currentAttempt >= maxAttempts) {
+            handleGameOver(false);
+        }
+    }
+
+    function handleGameOver(won) {
+        document.getElementById("submitBtn").disabled = true;
+        document.getElementById("countrySelector").disabled = true;
+        const banner = document.getElementById("statusBanner");
+
+        if (won) {
+            banner.className = "status-banner win";
+            banner.textContent = `Victory! You solved it in ${currentAttempt}/${maxAttempts} tries!`;
+        } else {
+            banner.className = "status-banner lose";
+            banner.innerHTML = `Game Over! The target was: <strong>${targetCountry.name}</strong>`;
+        }
+    }
+
+    window.onload = initGame;
+</script>
+
+</body>
+</html>
